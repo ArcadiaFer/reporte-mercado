@@ -1,0 +1,55 @@
+name: Reporte diario
+
+on:
+  # 12:07 UTC = 06:07 hora de Ciudad de México (UTC-6 todo el año, sin horario de verano).
+  # GitHub puede retrasar las tareas programadas unos 10-30 min en horas de mucha carga.
+  schedule:
+    - cron: "7 12 * * 1-5"
+  # Botón "Run workflow" en la pestaña Actions, para probarlo a mano.
+  workflow_dispatch:
+  # Al subir cambios al código se regenera la página (el commit del propio robot solo toca
+  # docs/, que no está en esta lista, así que no se dispara en bucle).
+  push:
+    branches: [main]
+    paths:
+      - "scripts/**"
+      - "config/**"
+      - ".github/workflows/reporte-diario.yml"
+
+permissions:
+  contents: write   # necesario para que el robot guarde docs/index.html en el repositorio
+
+concurrency:
+  group: reporte-diario
+  cancel-in-progress: false
+
+jobs:
+  generar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generar reporte y página
+        env:
+          # Opcional: si guardas tu token de Banxico como secreto del repositorio, aparece la
+          # sección macro. Sin él, simplemente se omite.
+          BANXICO_TOKEN: ${{ secrets.BANXICO_TOKEN }}
+        run: python scripts/research.py --ttl 0 --web docs/index.html --salida "$RUNNER_TEMP/reporte.md"
+
+      - name: Publicar en el repositorio
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          if git diff --cached --quiet; then
+            echo "Sin cambios que publicar."
+          else
+            git commit -m "Reporte $(TZ=America/Mexico_City date +%F)"
+            git pull --rebase origin main
+            git push
+          fi

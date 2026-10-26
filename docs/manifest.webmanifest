@@ -1,0 +1,15 @@
+{
+  "name": "Mercado GBM",
+  "short_name": "Mercado",
+  "description": "Reporte diario de research de mercado: BMV, SIC y macro.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0c1521",
+  "theme_color": "#0c1521",
+  "icons": [
+    { "src": "icono-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

@@ -1,0 +1,26 @@
+# Caché de precios: se regenera solo, no tiene sentido versionarlo
+datos/cache/
+
+# Token de Banxico y cualquier credencial local
+.env
+
+__pycache__/
+*.pyc
+
+# Lo siguiente es SOLO de tu computadora y no debe subirse al repositorio público.
+# (git no admite comentarios al final de una línea, por eso van arriba de cada patrón)
+
+# bitácora local: trae rutas de tu PC
+logs/
+
+# reportes en Markdown: en la nube la página los reemplaza
+reports/
+
+# notas y skills locales de Claude Code
+.claude/
+
+# notas de trabajo del proyecto
+CLAUDE.md
+
+# lanzador de tu Programador de Tareas: trae la ruta de tu PC
+scripts/run_daily.bat

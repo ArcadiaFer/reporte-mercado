@@ -1,0 +1,144 @@
+{
+  "_comentario": "Universo de seguimiento y reglas de screening. Todos los tickers fueron validados contra Yahoo Finance. Sufijo .MX = cotiza en BMV o SIC, precios en MXN.",
+
+  "universo": {
+    "bmv": [
+      { "ticker": "WALMEX.MX",     "nombre": "Walmart de México",      "sector": "Consumo básico" },
+      { "ticker": "GFNORTEO.MX",   "nombre": "Banorte",                "sector": "Financiero" },
+      { "ticker": "FEMSAUBD.MX",   "nombre": "FEMSA",                  "sector": "Consumo básico" },
+      { "ticker": "AMXB.MX",       "nombre": "América Móvil",          "sector": "Telecom" },
+      { "ticker": "GMEXICOB.MX",   "nombre": "Grupo México",           "sector": "Materiales" },
+      { "ticker": "CEMEXCPO.MX",   "nombre": "CEMEX",                  "sector": "Materiales" },
+      { "ticker": "GAPB.MX",       "nombre": "Aeropuertos del Pacífico","sector": "Infraestructura" },
+      { "ticker": "ASURB.MX",      "nombre": "Aeropuertos del Sureste","sector": "Infraestructura" },
+      { "ticker": "OMAB.MX",       "nombre": "Aeropuertos Centro Norte","sector": "Infraestructura" },
+      { "ticker": "PINFRA.MX",     "nombre": "Pinfra",                 "sector": "Infraestructura" },
+      { "ticker": "GRUMAB.MX",     "nombre": "Gruma",                  "sector": "Consumo básico" },
+      { "ticker": "KOFUBL.MX",     "nombre": "Coca-Cola FEMSA",        "sector": "Consumo básico" },
+      { "ticker": "BIMBOA.MX",     "nombre": "Grupo Bimbo",            "sector": "Consumo básico" },
+      { "ticker": "CHDRAUIB.MX",   "nombre": "Chedraui",               "sector": "Consumo básico" },
+      { "ticker": "ALSEA.MX",      "nombre": "Alsea",                  "sector": "Consumo discrecional" },
+      { "ticker": "LIVEPOLC-1.MX", "nombre": "Liverpool",              "sector": "Consumo discrecional" },
+      { "ticker": "TLEVISACPO.MX", "nombre": "Televisa",               "sector": "Comunicaciones" },
+      { "ticker": "ORBIA.MX",      "nombre": "Orbia",                  "sector": "Materiales" },
+      { "ticker": "PE&OLES.MX",    "nombre": "Industrias Peñoles",     "sector": "Materiales" },
+      { "ticker": "GCARSOA1.MX",   "nombre": "Grupo Carso",            "sector": "Industrial" },
+      { "ticker": "Q.MX",          "nombre": "Quálitas",               "sector": "Financiero" },
+      { "ticker": "BBAJIOO.MX",    "nombre": "Banco del Bajío",        "sector": "Financiero" },
+      { "ticker": "LABB.MX",       "nombre": "Genomma Lab",            "sector": "Salud" },
+      { "ticker": "VESTA.MX",      "nombre": "Vesta",                  "sector": "Inmobiliario" }
+    ],
+
+    "etf_sic": [
+      { "ticker": "VOO.MX", "nombre": "Vanguard S&P 500",        "sector": "ETF EE.UU." },
+      { "ticker": "IVV.MX", "nombre": "iShares Core S&P 500",    "sector": "ETF EE.UU." },
+      { "ticker": "SPY.MX", "nombre": "SPDR S&P 500",            "sector": "ETF EE.UU." },
+      { "ticker": "QQQ.MX", "nombre": "Invesco QQQ (Nasdaq 100)","sector": "ETF EE.UU." },
+      { "ticker": "VTI.MX", "nombre": "Vanguard Total Market",   "sector": "ETF EE.UU." },
+      { "ticker": "EEM.MX", "nombre": "iShares Emergentes",      "sector": "ETF Emergentes" },
+      { "ticker": "AGG.MX", "nombre": "iShares Bonos EE.UU.",    "sector": "ETF Renta fija" }
+    ],
+
+    "accion_sic": [
+      { "ticker": "AAPL.MX",  "nombre": "Apple",       "sector": "Tecnología" },
+      { "ticker": "MSFT.MX",  "nombre": "Microsoft",   "sector": "Tecnología" },
+      { "ticker": "NVDA.MX",  "nombre": "NVIDIA",      "sector": "Tecnología" },
+      { "ticker": "GOOGL.MX", "nombre": "Alphabet",    "sector": "Comunicaciones" },
+      { "ticker": "AMZN.MX",  "nombre": "Amazon",      "sector": "Consumo discrecional" },
+      { "ticker": "META.MX",  "nombre": "Meta",        "sector": "Comunicaciones" },
+      { "ticker": "TSLA.MX",  "nombre": "Tesla",       "sector": "Consumo discrecional" }
+    ],
+
+    "referencia": [
+      { "ticker": "^MXX",  "nombre": "IPC BMV",  "sector": "Índice" },
+      { "ticker": "MXN=X", "nombre": "USD/MXN",  "sector": "Divisa" }
+    ]
+  },
+
+  "_nota_banxico": "Los IDs de serie se verifican solos: la API devuelve el título oficial de cada serie, así que si un ID está mal lo verás en el reporte. Token gratuito en https://www.banxico.org.mx/SieAPIRest/service/v1/token",
+  "macro_banxico": ["SF43718", "SF43783", "SF43936", "SP1"],
+
+  "_nota_reglas": "Métricas disponibles: precio, ret_1d, ret_5d, ret_1m, ret_3m, ret_6m, ret_ytd, ret_1a, rsi14, vol_anual, dd_desde_max52, drawdown_max, sma50, sma200, tendencia (alcista|bajista), pct_repetidos, pct_sin_volumen, liquidez (ok|baja|muy_baja). Usa 'valor' para comparar contra un número y 'ref' para comparar contra otra métrica.",
+
+  "reglas": [
+    {
+      "id": "liquidez_insuficiente",
+      "descripcion": "Liquidez muy baja — los indicadores técnicos no son confiables",
+      "severidad": "alta",
+      "logica": "y",
+      "condiciones": [{ "metrica": "liquidez", "op": "==", "valor": "muy_baja" }]
+    },
+    {
+      "id": "sobreventa",
+      "descripcion": "RSI14 bajo 30 — zona de sobreventa técnica",
+      "severidad": "media",
+      "logica": "y",
+      "condiciones": [{ "metrica": "rsi14", "op": "<", "valor": 30 }]
+    },
+    {
+      "id": "sobrecompra",
+      "descripcion": "RSI14 sobre 70 — zona de sobrecompra técnica",
+      "severidad": "media",
+      "logica": "y",
+      "condiciones": [{ "metrica": "rsi14", "op": ">", "valor": 70 }]
+    },
+    {
+      "id": "correccion_profunda",
+      "descripcion": "Más de 20% abajo de su máximo de 52 semanas",
+      "severidad": "alta",
+      "logica": "y",
+      "condiciones": [{ "metrica": "dd_desde_max52", "op": "<", "valor": -20 }]
+    },
+    {
+      "id": "maximos_52",
+      "descripcion": "A menos de 2% de su máximo de 52 semanas",
+      "severidad": "baja",
+      "logica": "y",
+      "condiciones": [{ "metrica": "dd_desde_max52", "op": ">", "valor": -2 }]
+    },
+    {
+      "id": "tendencia_alcista_confirmada",
+      "descripcion": "Precio sobre SMA200 y SMA50 sobre SMA200",
+      "severidad": "info",
+      "logica": "y",
+      "condiciones": [
+        { "metrica": "precio", "op": ">", "ref": "sma200" },
+        { "metrica": "tendencia", "op": "==", "valor": "alcista" }
+      ]
+    },
+    {
+      "id": "tendencia_bajista_confirmada",
+      "descripcion": "Precio bajo SMA200 y SMA50 bajo SMA200",
+      "severidad": "alta",
+      "logica": "y",
+      "condiciones": [
+        { "metrica": "precio", "op": "<", "ref": "sma200" },
+        { "metrica": "tendencia", "op": "==", "valor": "bajista" }
+      ]
+    },
+    {
+      "id": "volatilidad_elevada",
+      "descripcion": "Volatilidad anualizada sobre 40%",
+      "severidad": "media",
+      "logica": "y",
+      "condiciones": [{ "metrica": "vol_anual", "op": ">", "valor": 40 }]
+    },
+    {
+      "id": "caida_semanal_fuerte",
+      "descripcion": "Caída mayor a 7% en 5 sesiones",
+      "severidad": "alta",
+      "logica": "y",
+      "condiciones": [{ "metrica": "ret_5d", "op": "<", "valor": -7 }]
+    },
+    {
+      "id": "rebote_desde_sobreventa",
+      "descripcion": "Rebote: RSI todavía bajo 45 pero con alza en la semana",
+      "severidad": "baja",
+      "logica": "y",
+      "condiciones": [
+        { "metrica": "rsi14", "op": "<", "valor": 45 },
+        { "metrica": "ret_5d", "op": ">", "valor": 2 }
+      ]
+    }
+  ]
+}
