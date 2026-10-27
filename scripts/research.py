@@ -1,9 +1,11 @@
 """
-Agente de research de mercado — universo GBM (BMV + SIC + macro).
+Agente de research de mercado — universo GBM (BMV + SIC + mercado de EE. UU. + macro).
 Stdlib-only: no pandas/numpy required.
 
 Orquesta: descarga de precios -> cálculo de indicadores -> screening por reglas
 -> noticias de los instrumentos con alertas -> reporte Markdown.
+
+Los valores del SIC (VOO.MX) se analizan sobre su mercado de origen (VOO): ver universo.py.
 
 Uso:
     python scripts/research.py
@@ -26,6 +28,7 @@ import fuentes
 import indicadores as ind
 import pagina_web
 import screening as scr
+import universo as uni
 
 RAIZ = Path(__file__).resolve().parent.parent
 
@@ -39,13 +42,6 @@ VENTANAS = {
     "ret_1a": 252,
 }
 VENTANA_52S = 252
-
-CATEGORIAS = [
-    ("bmv", "Acciones BMV"),
-    ("etf_sic", "ETFs del SIC"),
-    ("accion_sic", "Acciones internacionales (SIC)"),
-    ("referencia", "Referencias de mercado"),
-]
 
 
 # ---------------------------------------------------------------------------
@@ -148,64 +144,108 @@ def rsi_txt(v):
     return f"{v:.0f}{etiqueta}"
 
 
-def marca_liquidez(m):
-    """Sufijo de advertencia para instrumentos con datos poco confiables."""
-    return {"muy_baja": " ⚠⚠", "baja": " ⚠"}.get(m.get("liquidez"), "")
+def marca_liquidez(nivel):
+    """Sufijo de advertencia según el nivel de liquidez ('baja', 'muy_baja' o None)."""
+    return {"muy_baja": " ⚠⚠", "baja": " ⚠"}.get(nivel, "")
+
+
+def variacion_txt(m, clave):
+    """Variación de una métrica. En tasas (bono a 10 años) va en puntos base, no en %."""
+    v = m.get(clave)
+    if m.get("tipo") == "tasa":
+        return uni.pb_txt(uni.cambio_pb(m["precio"], v))
+    return pct(v)
+
+
+def nivel_txt(m):
+    """Nivel de una referencia: las tasas llevan el signo %."""
+    return f"{num(m['precio'])}%" if m.get("tipo") == "tasa" else num(m["precio"])
+
+
+def precio_txt(m):
+    """Precio con su moneda cuando es dinero (USD en EE. UU., MXN en la BMV)."""
+    return f"{num(m['precio'])} {m['moneda']}" if uni.cotiza_con_moneda(m) else num(m["precio"])
+
+
+def etiqueta_ticker(m):
+    """
+    Ticker listo para una celda. Si es la cara de origen de un valor del SIC agrega
+    entre paréntesis cómo se compra en GBM+ (con el aviso de liquidez de ese precio);
+    si su último cierre difiere del de la mayoría, lo indica.
+    """
+    texto = f"`{m['ticker']}`"
+    if m.get("sic_ticker"):
+        texto += f" (GBM+: `{m['sic_ticker']}`{marca_liquidez(m.get('sic_liquidez'))})"
+    else:
+        texto += marca_liquidez(m.get("liquidez"))
+    if m.get("fecha_distinta"):
+        texto += f" _(al {m['fecha_distinta']})_"
+    return texto
 
 
 # ---------------------------------------------------------------------------
 # Secciones del reporte
 # ---------------------------------------------------------------------------
 
-def seccion_panorama(metricas, lineas):
+def seccion_panorama(universo, metricas, lineas):
     lineas.append("## 1. Panorama\n")
-    faros = [
-        ("^MXX", "IPC (BMV)"),
-        ("MXN=X", "USD/MXN"),
-        ("VOO.MX", "S&P 500 vía VOO"),
-        ("QQQ.MX", "Nasdaq 100 vía QQQ"),
-    ]
-    presentes = [(t, etq) for t, etq in faros if t in metricas]
-    if not presentes:
+    filas = []
+    for clave in ("referencia", "indice_us"):
+        for e in universo.get(clave, []):
+            if e["ticker"] in metricas:
+                filas.append(metricas[e["ticker"]])
+    if not filas:
         lineas.append("_Sin referencias de mercado en el universo cargado._\n")
         return
 
     lineas.append("| Referencia | Nivel | 1D | 1M | YTD | 1A |")
     lineas.append("|---|---:|---:|---:|---:|---:|")
-    for t, etq in presentes:
-        m = metricas[t]
+    for m in filas:
         lineas.append(
-            f"| {etq} | {num(m['precio'])} | {pct(m['ret_1d'])} | {pct(m['ret_1m'])} "
-            f"| {pct(m['ret_ytd'])} | {pct(m['ret_1a'])} |"
+            f"| {m['nombre']} | {nivel_txt(m)} | {variacion_txt(m, 'ret_1d')} "
+            f"| {variacion_txt(m, 'ret_1m')} | {variacion_txt(m, 'ret_ytd')} "
+            f"| {variacion_txt(m, 'ret_1a')} |"
         )
     lineas.append("")
+    if any(m.get("tipo") for m in filas):
+        lineas.append(
+            "_VIX: volatilidad que el mercado espera para el S&P 500 en los próximos 30 días "
+            "(más alto = más nerviosismo). Bono a 10 años: rendimiento anual del bono del "
+            "Tesoro de EE. UU.; sus cambios van en puntos base (pb; 100 pb = 1 punto porcentual)._\n"
+        )
 
 
 def seccion_tabla_maestra(universo, metricas, lineas):
     lineas.append("## 2. Tabla maestra\n")
-    for clave, titulo in CATEGORIAS:
-        entradas = [e for e in universo.get(clave, []) if e["ticker"] in metricas]
-        if not entradas:
+    lineas.append(
+        "_Los valores del SIC se muestran con los datos de su mercado de origen (USD), que son "
+        "los confiables; entre paréntesis va el ticker con el que se compran en GBM+._\n"
+    )
+    for clave, titulo in uni.CATEGORIAS_LISTADO:
+        mostrados = [uni.principal(e, metricas) for e in universo.get(clave, [])]
+        mostrados = [m for m in mostrados if m]
+        if not mostrados:
             continue
 
         lineas.append(f"### {titulo}\n")
         lineas.append("| Ticker | Nombre | Precio | 1D | 1M | 3M | YTD | 1A | RSI | Vol.an | vs Máx52s | Tend. |")
         lineas.append("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|:--:|")
-        for e in sorted(entradas, key=lambda x: metricas[x["ticker"]]["ret_1m"] or -999, reverse=True):
-            m = metricas[e["ticker"]]
+        for m in sorted(mostrados, key=lambda x: x["ret_1m"] if x["ret_1m"] is not None else -999,
+                        reverse=True):
             tend = {"alcista": "▲", "bajista": "▼"}.get(m["tendencia"], "—")
             lineas.append(
-                f"| `{e['ticker']}`{marca_liquidez(m)} | {e['nombre']} | {num(m['precio'])} "
+                f"| {etiqueta_ticker(m)} | {m['nombre']} | {precio_txt(m)} "
                 f"| {pct(m['ret_1d'])} | {pct(m['ret_1m'])} | {pct(m['ret_3m'])} "
                 f"| {pct(m['ret_ytd'])} | {pct(m['ret_1a'])} | {rsi_txt(m['rsi14'])} "
                 f"| {num(m['vol_anual'], 1)}% | {pct(m['dd_desde_max52'])} | {tend} |"
             )
         lineas.append("")
 
-    if any(m.get("liquidez") in ("baja", "muy_baja") for m in metricas.values()):
+    if any(m.get("liquidez") in ("baja", "muy_baja") or m.get("sic_liquidez") in ("baja", "muy_baja")
+           for m in metricas.values()):
         lineas.append(
-            "⚠ = liquidez baja · ⚠⚠ = liquidez muy baja. "
-            "Sus indicadores son poco confiables; ver sección 6.\n"
+            "⚠ = liquidez baja · ⚠⚠ = liquidez muy baja en el SIC: el precio que verías en GBM+ "
+            "puede alejarse del de origen; ver sección 6.\n"
         )
 
 
@@ -223,9 +263,9 @@ def seccion_screening(resultados, metricas, lineas):
         lineas.append("| Ticker | Nombre | Precio | RSI | 1M | vs Máx52s |")
         lineas.append("|---|---|---:|---:|---:|---:|")
         for t in bloque["coincidencias"]:
-            m = metricas[t]
+            m = uni.cara_de_origen(metricas[t], metricas)
             lineas.append(
-                f"| `{t}` | {m['nombre'][:30]} | {num(m['precio'])} | {rsi_txt(m['rsi14'])} "
+                f"| {etiqueta_ticker(m)} | {m['nombre'][:30]} | {precio_txt(m)} | {rsi_txt(m['rsi14'])} "
                 f"| {pct(m['ret_1m'])} | {pct(m['dd_desde_max52'])} |"
             )
         lineas.append("")
@@ -233,8 +273,13 @@ def seccion_screening(resultados, metricas, lineas):
 
 def seccion_extremos(metricas, lineas):
     lineas.append("## 4. Extremos del mes\n")
-    elegibles = [m for t, m in metricas.items()
-                 if m["ret_1m"] is not None and t not in ("MXN=X", "^MXX")]
+    lineas.append(
+        "_Entre acciones y ETFs invertibles, un renglón por instrumento (los del SIC con los datos "
+        "de su origen). Cada rendimiento va en la moneda en que cotiza: pesos en la BMV, dólares "
+        "en EE. UU._\n"
+    )
+    elegibles = [m for m in uni.representantes(metricas)
+                 if m["ret_1m"] is not None and m.get("categoria") in uni.CATEGORIAS_EXTREMOS]
     if len(elegibles) < 2:
         lineas.append("_Datos insuficientes._\n")
         return
@@ -247,22 +292,26 @@ def seccion_extremos(metricas, lineas):
     lineas.append("| | Ticker | Nombre | 1M | 3M | RSI |")
     lineas.append("|---|---|---|---:|---:|---:|")
     for m in ordenados[:k]:
-        lineas.append(f"| ▲ | `{m['ticker']}` | {m['nombre'][:30]} | {pct(m['ret_1m'])} | {pct(m['ret_3m'])} | {rsi_txt(m['rsi14'])} |")
+        lineas.append(f"| ▲ | {etiqueta_ticker(m)} | {m['nombre'][:30]} | {pct(m['ret_1m'])} | {pct(m['ret_3m'])} | {rsi_txt(m['rsi14'])} |")
     for m in ordenados[-k:][::-1]:
-        lineas.append(f"| ▼ | `{m['ticker']}` | {m['nombre'][:30]} | {pct(m['ret_1m'])} | {pct(m['ret_3m'])} | {rsi_txt(m['rsi14'])} |")
+        lineas.append(f"| ▼ | {etiqueta_ticker(m)} | {m['nombre'][:30]} | {pct(m['ret_1m'])} | {pct(m['ret_3m'])} | {rsi_txt(m['rsi14'])} |")
     lineas.append("")
 
 
 def calcular_correlaciones(datos, metricas):
     """
-    Correlación de cada instrumento contra el IPC y contra el S&P 500 (vía VOO).
+    Correlación de cada instrumento contra el IPC y contra el S&P 500.
+
+    El S&P 500 se mide con el índice real (^GSPC); si no se descargó, con VOO en su
+    mercado de origen. Ya no con VOO.MX: sus cierres rancios del SIC distorsionaban la
+    correlación. Los valores del SIC se miden con su serie de origen, no la local.
 
     Devuelve una lista de filas (ticker, nombre, r_ipc, r_spx), ordenada de mayor
     a menor contra el IPC, o None si no se descargó ninguno de los dos índices.
     La usan tanto el reporte Markdown como la página web.
     """
     base_ipc = datos.get("^MXX")
-    base_spx = datos.get("VOO.MX")
+    base_spx = datos.get("^GSPC") or datos.get("VOO")
     if not base_ipc and not base_spx:
         return None
 
@@ -275,9 +324,13 @@ def calcular_correlaciones(datos, metricas):
         )
 
     filas = []
-    for t, serie in datos.items():
-        if t in ("^MXX", "VOO.MX"):
+    for m in uni.representantes(metricas):
+        t = m["ticker"]
+        # Los índices de EE. UU. (S&P, VIX, bono) son la vara de medir, no un instrumento
+        # más; el IPC también. Correlacionar un índice consigo mismo no dice nada.
+        if t == "^MXX" or m.get("categoria") == "indice_us":
             continue
+        serie = datos[t]
         r_ipc = corr_contra(serie, base_ipc)
         r_spx = corr_contra(serie, base_spx)
         if r_ipc is not None or r_spx is not None:
@@ -317,8 +370,10 @@ def seccion_calidad(metricas, lineas):
         "_Los instrumentos del SIC operan con volúmenes mucho menores que en su mercado de "
         "origen. Si una sesión cierra sin operaciones, el cierre anterior se arrastra y el "
         "rendimiento aparece como 0.00%, lo que **subestima la volatilidad y rompe las "
-        "correlaciones**. Aquí se listan los instrumentos cuyos indicadores conviene tomar "
-        "con reserva._\n"
+        "correlaciones**. Por eso los indicadores de cada valor del SIC se calculan sobre su "
+        "mercado de origen, que sí opera con regularidad; aquí se listan los precios locales "
+        "(los que verías en GBM+) que conviene tomar con reserva: pueden estar rezagados "
+        "respecto al precio de origen._\n"
     )
 
     sospechosos = sorted(
@@ -329,12 +384,13 @@ def seccion_calidad(metricas, lineas):
         lineas.append("Sin instrumentos problemáticos: todas las series operaron con regularidad.\n")
         return
 
-    lineas.append("| Ticker | Nombre | Sesiones sin volumen | Cierres repetidos | Nivel |")
-    lineas.append("|---|---|---:|---:|:--:|")
+    lineas.append("| Ticker | Nombre | Origen | Sesiones sin volumen | Cierres repetidos | Nivel |")
+    lineas.append("|---|---|---|---:|---:|:--:|")
     for m in sospechosos:
         nivel = "⚠⚠ muy baja" if m["liquidez"] == "muy_baja" else "⚠ baja"
+        origen = f"`{m['origen']}`" if m.get("origen") else "—"
         lineas.append(
-            f"| `{m['ticker']}` | {m['nombre'][:30]} | {num(m['pct_sin_volumen'], 1)}% "
+            f"| `{m['ticker']}` | {m['nombre'][:30]} | {origen} | {num(m['pct_sin_volumen'], 1)}% "
             f"| {num(m['pct_repetidos'], 1)}% | {nivel} |"
         )
     lineas.append("")
@@ -411,13 +467,13 @@ def construir_reporte(cfg, datos, metricas, resultados, macro, hay_token,
         f"**Generado:** {ahora.strftime('%Y-%m-%d %H:%M')} (hora local)  ",
         f"**Instrumentos analizados:** {len(datos)}  ",
         f"**Ventana histórica:** {rango}  ",
-        f"**Última sesión con datos:** {max(m['ultima_fecha'] for m in metricas.values()) if metricas else '—'}",
+        f"**Última sesión con datos:** {uni.fecha_dominante(metricas) or '—'}",
         "",
         "---",
         "",
     ]
 
-    seccion_panorama(metricas, lineas)
+    seccion_panorama(cfg["universo"], metricas, lineas)
     seccion_tabla_maestra(cfg["universo"], metricas, lineas)
     seccion_screening(resultados, metricas, lineas)
     seccion_extremos(metricas, lineas)
@@ -453,12 +509,13 @@ def main():
         cfg = json.load(f)
 
     universo = cfg["universo"]
-    todos = [e["ticker"] for cat, _ in CATEGORIAS for e in universo.get(cat, [])]
 
     if args.tickers:
-        pedidos = [t.strip() for t in args.tickers.split(",") if t.strip()]
+        # Con un subconjunto, los valores del SIC traen también su ticker de origen.
+        pedidos = uni.con_origenes(
+            universo, [t.strip() for t in args.tickers.split(",") if t.strip()])
     else:
-        pedidos = todos
+        pedidos = uni.tickers_del_universo(universo)
 
     print(f"Descargando {len(pedidos)} instrumentos (rango={args.rango})...")
     cache_dir = RAIZ / "datos" / "cache"
@@ -471,12 +528,11 @@ def main():
     print(f"Calculando indicadores sobre {len(datos)} series...")
     metricas = {t: calcular_metricas(s) for t, s in datos.items()}
 
-    # Los nombres del watchlist son más legibles que la razón social que
-    # devuelve Yahoo ("Wal-Mart de México, S.A.B. de C.V.").
-    nombres = {e["ticker"]: e["nombre"]
-               for cat, _ in CATEGORIAS for e in universo.get(cat, [])}
-    for t, m in metricas.items():
-        m["nombre"] = nombres.get(t, m["nombre"])
+    # Pone a cada serie su categoría, el nombre del watchlist (más legible que la razón
+    # social que devuelve Yahoo, "Wal-Mart de México, S.A.B. de C.V.") y une cada valor
+    # del SIC con su mercado de origen. Debe ir antes del screening: las reglas leen la
+    # categoría para saber a quién aplican.
+    uni.anotar(universo, metricas)
 
     print(f"Evaluando {len(cfg.get('reglas', []))} reglas de screening...")
     resultados = scr.correr_screening(cfg.get("reglas", []), metricas)
@@ -497,6 +553,8 @@ def main():
         for bloque in resultados.values():
             if bloque["regla"].get("severidad") in ("alta", "media"):
                 for t in bloque["coincidencias"]:
+                    # Para un valor del SIC se buscan titulares de su ticker de origen.
+                    t = uni.cara_de_origen(metricas[t], metricas)["ticker"]
                     if t not in con_alerta:
                         con_alerta.append(t)
         for t in con_alerta[:args.max_noticias]:
@@ -521,7 +579,7 @@ def main():
             print(f"ERROR: solo {len(datos)}/{len(pedidos)} series; no se genera la pagina web.")
             return 1
         pagina = pagina_web.construir_pagina(
-            universo, CATEGORIAS, metricas, resultados,
+            universo, uni.CATEGORIAS_LISTADO, metricas, resultados,
             calcular_correlaciones(datos, metricas), macro, hay_token,
             noticias_por_ticker, noticias_mkt, len(pedidos), fuentes.ERRORES, args.rango,
         )

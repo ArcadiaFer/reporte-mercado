@@ -19,6 +19,11 @@ Formato de una regla:
 
 `valor` puede ser un número o el nombre de otra métrica (comparación cruzada),
 en cuyo caso se escribe como {"metrica": "precio", "op": ">", "ref": "sma200"}.
+
+Una regla puede traer "categorias": ["bmv", "etf_us", ...] para aplicarse solo a esos
+grupos (la categoría de cada instrumento la pone universo.anotar). Sin ese campo
+aplica a todos. Así las reglas técnicas se corren sobre el mercado de origen de un
+valor del SIC, que tiene datos confiables, y no sobre su cotización local.
 """
 
 OPERADORES = {
@@ -105,10 +110,12 @@ def correr_screening(reglas, metricas_por_ticker):
     """
     salida = {}
     for regla in reglas:
+        alcance = regla.get("categorias")
         coincidencias = [
             ticker
             for ticker, metricas in metricas_por_ticker.items()
-            if evaluar_regla(regla, metricas) is True
+            if (not alcance or metricas.get("categoria") in alcance)
+            and evaluar_regla(regla, metricas) is True
         ]
         salida[regla.get("id", "sin_id")] = {
             "regla": regla,

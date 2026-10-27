@@ -1,13 +1,21 @@
 # Mercado GBM — reporte diario
 
 Reporte de research de mercado para el universo invertible desde una casa de bolsa mexicana:
-acciones de la BMV, acciones y ETFs del SIC y referencias macro. Se genera cada día hábil por
-la mañana y se publica como una página pensada para leerse en el celular.
+acciones de la BMV, acciones y ETFs de EE. UU. que se compran en el SIC, el panorama del mercado
+estadounidense (S&P 500, Nasdaq, Dow, VIX, bono a 10 años y los 11 sectores) y referencias macro.
+Se genera cada día hábil por la mañana y se publica como una página pensada para leerse en el celular.
 
 **Qué calcula:** rendimientos (5 días a 12 meses), RSI, volatilidad, caída desde el máximo de 52
 semanas, tendencia (medias de 50 y 200 sesiones), correlación contra el IPC y el S&P 500, y un
 conjunto de reglas de screening definidas en `config/watchlist.json`. También mide qué tan
-confiables son los datos de cada instrumento del SIC (muchos cierran días sin operaciones).
+confiables son los precios de cada instrumento del SIC (muchos cierran días sin operaciones).
+
+**Cómo se analizan los valores del SIC.** Un valor como `VOO.MX` es la versión mexicana de `VOO`
+(que cotiza en Nueva York). Su volumen es mínimo y muchas sesiones cierran sin operaciones, así
+que sus indicadores no son confiables. Por eso los indicadores y las alertas se calculan sobre el
+mercado de origen (en dólares), y el ticker del SIC se muestra como «En GBM+», con su precio en
+pesos y un aviso si su liquidez es baja. Cada valor del SIC declara su origen en el campo `origen`
+de `config/watchlist.json`.
 
 > **Alcance.** Es una herramienta de research: describe lo que hicieron los precios y qué reglas
 > técnicas se activaron. No es una recomendación de compra o venta ni asesoría de inversión, no
@@ -18,6 +26,7 @@ confiables son los datos de cada instrumento del SIC (muchos cierran días sin o
 ```
 scripts/fuentes.py       descarga de datos (Yahoo Finance, Banxico, noticias RSS)
 scripts/indicadores.py   indicadores técnicos y medidas de calidad de datos
+scripts/universo.py      empareja cada valor del SIC con su mercado de origen
 scripts/screening.py     motor de reglas (comparaciones sobre números, sin IA)
 scripts/research.py      orquestador: descarga -> indicadores -> reglas -> reporte
 scripts/pagina_web.py    genera la página HTML para celular

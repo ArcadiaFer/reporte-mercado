@@ -1,5 +1,5 @@
 {
-  "_comentario": "Universo de seguimiento y reglas de screening. Todos los tickers fueron validados contra Yahoo Finance. Sufijo .MX = cotiza en BMV o SIC, precios en MXN.",
+  "_comentario": "Universo de seguimiento y reglas de screening. Todos los tickers fueron validados contra Yahoo Finance. Sufijo .MX = cotiza en BMV o SIC, precios en MXN. Sin sufijo = mercado de EE. UU., precios en USD. En etf_sic y accion_sic, el campo origen es el ticker del mismo valor en EE. UU.: los indicadores se calculan sobre el origen (datos confiables) y el .MX se muestra como el precio que pagarias en GBM+.",
 
   "universo": {
     "bmv": [
@@ -30,28 +30,50 @@
     ],
 
     "etf_sic": [
-      { "ticker": "VOO.MX", "nombre": "Vanguard S&P 500",        "sector": "ETF EE.UU." },
-      { "ticker": "IVV.MX", "nombre": "iShares Core S&P 500",    "sector": "ETF EE.UU." },
-      { "ticker": "SPY.MX", "nombre": "SPDR S&P 500",            "sector": "ETF EE.UU." },
-      { "ticker": "QQQ.MX", "nombre": "Invesco QQQ (Nasdaq 100)","sector": "ETF EE.UU." },
-      { "ticker": "VTI.MX", "nombre": "Vanguard Total Market",   "sector": "ETF EE.UU." },
-      { "ticker": "EEM.MX", "nombre": "iShares Emergentes",      "sector": "ETF Emergentes" },
-      { "ticker": "AGG.MX", "nombre": "iShares Bonos EE.UU.",    "sector": "ETF Renta fija" }
+      { "ticker": "VOO.MX", "nombre": "Vanguard S&P 500",        "sector": "ETF EE.UU.", "origen": "VOO" },
+      { "ticker": "IVV.MX", "nombre": "iShares Core S&P 500",    "sector": "ETF EE.UU.", "origen": "IVV" },
+      { "ticker": "SPY.MX", "nombre": "SPDR S&P 500",            "sector": "ETF EE.UU.", "origen": "SPY" },
+      { "ticker": "QQQ.MX", "nombre": "Invesco QQQ (Nasdaq 100)","sector": "ETF EE.UU.", "origen": "QQQ" },
+      { "ticker": "VTI.MX", "nombre": "Vanguard Total Market",   "sector": "ETF EE.UU.", "origen": "VTI" },
+      { "ticker": "EEM.MX", "nombre": "iShares Emergentes",      "sector": "ETF Emergentes", "origen": "EEM" },
+      { "ticker": "AGG.MX", "nombre": "iShares Bonos EE.UU.",    "sector": "ETF Renta fija", "origen": "AGG" }
     ],
 
     "accion_sic": [
-      { "ticker": "AAPL.MX",  "nombre": "Apple",       "sector": "Tecnología" },
-      { "ticker": "MSFT.MX",  "nombre": "Microsoft",   "sector": "Tecnología" },
-      { "ticker": "NVDA.MX",  "nombre": "NVIDIA",      "sector": "Tecnología" },
-      { "ticker": "GOOGL.MX", "nombre": "Alphabet",    "sector": "Comunicaciones" },
-      { "ticker": "AMZN.MX",  "nombre": "Amazon",      "sector": "Consumo discrecional" },
-      { "ticker": "META.MX",  "nombre": "Meta",        "sector": "Comunicaciones" },
-      { "ticker": "TSLA.MX",  "nombre": "Tesla",       "sector": "Consumo discrecional" }
+      { "ticker": "AAPL.MX",  "nombre": "Apple",       "sector": "Tecnología", "origen": "AAPL" },
+      { "ticker": "MSFT.MX",  "nombre": "Microsoft",   "sector": "Tecnología", "origen": "MSFT" },
+      { "ticker": "NVDA.MX",  "nombre": "NVIDIA",      "sector": "Tecnología", "origen": "NVDA" },
+      { "ticker": "GOOGL.MX", "nombre": "Alphabet",    "sector": "Comunicaciones", "origen": "GOOGL" },
+      { "ticker": "AMZN.MX",  "nombre": "Amazon",      "sector": "Consumo discrecional", "origen": "AMZN" },
+      { "ticker": "META.MX",  "nombre": "Meta",        "sector": "Comunicaciones", "origen": "META" },
+      { "ticker": "TSLA.MX",  "nombre": "Tesla",       "sector": "Consumo discrecional", "origen": "TSLA" }
+    ],
+
+    "sector_us": [
+      { "ticker": "XLK",  "nombre": "Tecnología",            "sector": "Sector S&P 500" },
+      { "ticker": "XLF",  "nombre": "Financiero",            "sector": "Sector S&P 500" },
+      { "ticker": "XLE",  "nombre": "Energía",               "sector": "Sector S&P 500" },
+      { "ticker": "XLV",  "nombre": "Salud",                 "sector": "Sector S&P 500" },
+      { "ticker": "XLY",  "nombre": "Consumo discrecional",  "sector": "Sector S&P 500" },
+      { "ticker": "XLP",  "nombre": "Consumo básico",        "sector": "Sector S&P 500" },
+      { "ticker": "XLI",  "nombre": "Industrial",            "sector": "Sector S&P 500" },
+      { "ticker": "XLU",  "nombre": "Servicios públicos",    "sector": "Sector S&P 500" },
+      { "ticker": "XLB",  "nombre": "Materiales",            "sector": "Sector S&P 500" },
+      { "ticker": "XLRE", "nombre": "Inmobiliario",          "sector": "Sector S&P 500" },
+      { "ticker": "XLC",  "nombre": "Comunicaciones",        "sector": "Sector S&P 500" }
     ],
 
     "referencia": [
       { "ticker": "^MXX",  "nombre": "IPC BMV",  "sector": "Índice" },
       { "ticker": "MXN=X", "nombre": "USD/MXN",  "sector": "Divisa" }
+    ],
+
+    "indice_us": [
+      { "ticker": "^GSPC", "nombre": "S&P 500",              "sector": "Índice" },
+      { "ticker": "^IXIC", "nombre": "Nasdaq",               "sector": "Índice" },
+      { "ticker": "^DJI",  "nombre": "Dow Jones",            "sector": "Índice" },
+      { "ticker": "^VIX",  "nombre": "VIX (volatilidad)",    "sector": "Volatilidad", "tipo": "volatilidad" },
+      { "ticker": "^TNX",  "nombre": "Bono EE. UU. 10 años", "sector": "Tasa",        "tipo": "tasa" }
     ]
   },
 
@@ -60,11 +82,14 @@
 
   "_nota_reglas": "Métricas disponibles: precio, ret_1d, ret_5d, ret_1m, ret_3m, ret_6m, ret_ytd, ret_1a, rsi14, vol_anual, dd_desde_max52, drawdown_max, sma50, sma200, tendencia (alcista|bajista), pct_repetidos, pct_sin_volumen, liquidez (ok|baja|muy_baja). Usa 'valor' para comparar contra un número y 'ref' para comparar contra otra métrica.",
 
+  "_nota_categorias": "Cada regla puede traer categorias para aplicarse solo a esos grupos; sin el campo aplica a todos. Grupos: bmv, referencia (IPC y USD/MXN), etf_us y accion_us (el mercado de ORIGEN de los valores del SIC: es donde se corren los indicadores tecnicos), sector_us, etf_sic y accion_sic (la cotizacion local en pesos). Los indices de EE. UU. (S&P, VIX, bono a 10 anios) nunca entran al screening.",
+
   "reglas": [
     {
       "id": "liquidez_insuficiente",
-      "descripcion": "Liquidez muy baja — los indicadores técnicos no son confiables",
+      "descripcion": "Liquidez muy baja en el SIC — el precio local puede alejarse del de origen",
       "severidad": "alta",
+      "categorias": ["bmv", "referencia", "etf_sic", "accion_sic"],
       "logica": "y",
       "condiciones": [{ "metrica": "liquidez", "op": "==", "valor": "muy_baja" }]
     },
@@ -72,6 +97,7 @@
       "id": "sobreventa",
       "descripcion": "RSI14 bajo 30 — zona de sobreventa técnica",
       "severidad": "media",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "rsi14", "op": "<", "valor": 30 }]
     },
@@ -79,6 +105,7 @@
       "id": "sobrecompra",
       "descripcion": "RSI14 sobre 70 — zona de sobrecompra técnica",
       "severidad": "media",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "rsi14", "op": ">", "valor": 70 }]
     },
@@ -86,6 +113,7 @@
       "id": "correccion_profunda",
       "descripcion": "Más de 20% abajo de su máximo de 52 semanas",
       "severidad": "alta",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "dd_desde_max52", "op": "<", "valor": -20 }]
     },
@@ -93,6 +121,7 @@
       "id": "maximos_52",
       "descripcion": "A menos de 2% de su máximo de 52 semanas",
       "severidad": "baja",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "dd_desde_max52", "op": ">", "valor": -2 }]
     },
@@ -100,6 +129,7 @@
       "id": "tendencia_alcista_confirmada",
       "descripcion": "Precio sobre SMA200 y SMA50 sobre SMA200",
       "severidad": "info",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [
         { "metrica": "precio", "op": ">", "ref": "sma200" },
@@ -110,6 +140,7 @@
       "id": "tendencia_bajista_confirmada",
       "descripcion": "Precio bajo SMA200 y SMA50 bajo SMA200",
       "severidad": "alta",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [
         { "metrica": "precio", "op": "<", "ref": "sma200" },
@@ -120,6 +151,7 @@
       "id": "volatilidad_elevada",
       "descripcion": "Volatilidad anualizada sobre 40%",
       "severidad": "media",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "vol_anual", "op": ">", "valor": 40 }]
     },
@@ -127,6 +159,7 @@
       "id": "caida_semanal_fuerte",
       "descripcion": "Caída mayor a 7% en 5 sesiones",
       "severidad": "alta",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "ret_5d", "op": "<", "valor": -7 }]
     },
@@ -134,6 +167,7 @@
       "id": "rebote_desde_sobreventa",
       "descripcion": "Rebote: RSI todavía bajo 45 pero con alza en la semana",
       "severidad": "baja",
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
       "logica": "y",
       "condiciones": [
         { "metrica": "rsi14", "op": "<", "valor": 45 },

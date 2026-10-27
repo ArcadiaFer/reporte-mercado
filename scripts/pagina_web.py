@@ -14,6 +14,8 @@ Sin eso, un titular con "<script>" se ejecutaría dentro de tu página.
 import html
 from datetime import datetime, timedelta, timezone
 
+import universo as uni
+
 # Ciudad de México no usa horario de verano desde 2022: es UTC-6 todo el año.
 # Se fija a mano porque `zoneinfo` en Windows necesita instalar datos extra.
 CDMX = timezone(timedelta(hours=-6))
@@ -48,13 +50,23 @@ def pct(v, decimales=1):
     return "—" if v is None else f"{v:+.{decimales}f}%"
 
 
-def pct_html(v, decimales=1):
+def pct_html(v, decimales=1, neutro=False):
     """Porcentaje con color según signo. El signo (+/-) va siempre en el texto,
-    así no se depende solo del color para distinguir ganancia de pérdida."""
+    así no se depende solo del color para distinguir ganancia de pérdida.
+    `neutro=True` quita el verde/rojo: que el VIX o una tasa suban no es bueno ni malo."""
     if v is None:
         return "—"
-    clase = "pos" if v > 0 else "neg" if v < 0 else ""
+    clase = "" if neutro else "pos" if v > 0 else "neg" if v < 0 else ""
     return f'<span class="{clase}">{pct(v, decimales)}</span>'
+
+
+def variacion_html(m, clave):
+    """Variación de una métrica lista para mostrar: puntos base en tasas (siempre sin
+    color), % en lo demás."""
+    v = m.get(clave)
+    if m.get("tipo") == "tasa":
+        return uni.pb_txt(uni.cambio_pb(m["precio"], v))
+    return pct_html(v, neutro=uni.es_neutro(m))
 
 
 def rsi_txt(v):
@@ -74,6 +86,15 @@ def fecha_larga(dt):
     return f"{DIAS[dt.weekday()]} {dt.day} de {MESES[dt.month - 1]} de {dt.year}"
 
 
+def fecha_corta(iso):
+    """'2026-10-23' -> '23 oct'. Devuelve '—' si la fecha no se puede leer."""
+    try:
+        d = datetime.strptime(iso, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return "—"
+    return f"{d.day} {MESES[d.month - 1][:3]}"
+
+
 # ---------------------------------------------------------------------------
 # Piezas reutilizables
 # ---------------------------------------------------------------------------
@@ -89,8 +110,24 @@ def fila(m, celdas):
         "bajista": '<span class="neg" title="Tendencia bajista">▼</span>',
     }.get(m.get("tendencia"), "")
 
-    texto_aviso = {"muy_baja": "liquidez muy baja", "baja": "liquidez baja"}.get(m.get("liquidez"))
-    aviso = f'<span class="aviso">⚠ {texto_aviso}</span>' if texto_aviso else ""
+    # Si el valor es la cara de origen de uno del SIC, la línea "En GBM+" muestra con qué
+    # ticker se compra y a qué precio en pesos, y el aviso de liquidez es el de ESE precio
+    # (el del origen casi siempre está bien). Si no, el aviso es el de la propia serie.
+    via = ""
+    if m.get("sic_ticker"):
+        precio_sic = ""
+        if m.get("sic_precio") is not None:
+            precio_sic = f' · {num(m["sic_precio"])} {esc(m.get("sic_moneda", ""))}'
+        via = f'<span class="via">En GBM+: <b>{esc(m["sic_ticker"])}</b>{precio_sic}</span>'
+        nivel_liquidez, donde = m.get("sic_liquidez"), " en el SIC"
+    else:
+        nivel_liquidez, donde = m.get("liquidez"), ""
+    texto_aviso = {"muy_baja": "liquidez muy baja", "baja": "liquidez baja"}.get(nivel_liquidez)
+    aviso = f'<span class="aviso">⚠ {texto_aviso}{donde}</span>' if texto_aviso else ""
+
+    moneda = f' <small>{esc(m["moneda"])}</small>' if uni.cotiza_con_moneda(m) else ""
+    # Si el último cierre de esta serie no es el de la mayoría, se dice cuál es.
+    desfase = f'<small class="desfase">al {fecha_corta(m["fecha_distinta"])}</small>' if m.get("fecha_distinta") else ""
 
     cuadricula = "".join(
         f"<div><dt>{esc(etiqueta)}</dt><dd>{valor}</dd></div>" for etiqueta, valor in celdas
@@ -99,9 +136,9 @@ def fila(m, celdas):
         '<li class="fila">'
         '<div class="cab">'
         f'<div class="id"><b>{esc(m["ticker"])}</b> {tendencia}'
-        f'<span class="nombre">{esc(m["nombre"])}</span>{aviso}</div>'
-        f'<div class="der"><span class="precio">{num(m["precio"])}</span>'
-        f'<span class="dia">{pct_html(m["ret_1d"])} <small>1D</small></span></div>'
+        f'<span class="nombre">{esc(m["nombre"])}</span>{via}{aviso}</div>'
+        f'<div class="der"><span class="precio">{num(m["precio"])}{moneda}</span>'
+        f'<span class="dia">{pct_html(m["ret_1d"])} <small>1D</small></span>{desfase}</div>'
         "</div>"
         f'<dl class="met">{cuadricula}</dl>'
         "</li>"
@@ -139,25 +176,41 @@ def lista_noticias(items):
 # Secciones
 # ---------------------------------------------------------------------------
 
-def seccion_panorama(metricas):
-    faros = [("^MXX", "IPC (BMV)"), ("MXN=X", "USD/MXN"),
-             ("VOO.MX", "S&P 500 vía VOO"), ("QQQ.MX", "Nasdaq 100 vía QQQ")]
-    tarjetas = []
-    for ticker, etiqueta in faros:
-        m = metricas.get(ticker)
-        if not m:
-            continue
-        tarjetas.append(
-            '<div class="tarjeta">'
-            f'<div class="etq-t">{esc(etiqueta)}</div>'
-            f'<div class="nivel">{num(m["precio"])}</div>'
-            f'<div class="delta">{pct_html(m["ret_1d"])} <small>1D</small> · '
-            f'{pct_html(m["ret_ytd"])} <small>año</small></div>'
-            "</div>"
-        )
-    if not tarjetas:
+# Grupos de tarjetas del panorama: (título, categoría del watchlist).
+GRUPOS_PANORAMA = [("México", "referencia"), ("Estados Unidos", "indice_us")]
+
+NOTA_EEUU = ("VIX: volatilidad que el mercado espera para el S&amp;P 500 en los próximos 30 días "
+             "(más alto = más nerviosismo). Bono a 10 años: rendimiento anual del bono del Tesoro "
+             "de EE. UU.; sus cambios van en puntos base (pb; 100 pb = 1 punto porcentual).")
+
+
+def tarjeta(m):
+    """Una tarjeta del panorama: nombre, nivel y cambio en el día y en el año."""
+    es_tasa = m.get("tipo") == "tasa"
+    nivel = f'{num(m["precio"])}%' if es_tasa else num(m["precio"])
+    desfase = f' <small class="desfase">al {fecha_corta(m["fecha_distinta"])}</small>' if m.get("fecha_distinta") else ""
+    return (
+        '<div class="tarjeta">'
+        f'<div class="etq-t">{esc(m["nombre"])}</div>'
+        f'<div class="nivel">{nivel}</div>'
+        f'<div class="delta">{variacion_html(m, "ret_1d")} <small>1D</small> · '
+        f'{variacion_html(m, "ret_ytd")} <small>año</small>{desfase}</div>'
+        "</div>"
+    )
+
+
+def seccion_panorama(universo, metricas):
+    grupos = []
+    for titulo, clave in GRUPOS_PANORAMA:
+        tarjetas = [tarjeta(metricas[e["ticker"]])
+                    for e in universo.get(clave, []) if e["ticker"] in metricas]
+        if tarjetas:
+            nota = f'<p class="nota-pie">{NOTA_EEUU}</p>' if clave == "indice_us" else ""
+            grupos.append(f'<h3 class="grupo">{esc(titulo)}</h3>'
+                          f'<div class="rejilla">{"".join(tarjetas)}</div>{nota}')
+    if not grupos:
         return ""
-    return f'<section><h2>Panorama</h2><div class="rejilla">{"".join(tarjetas)}</div></section>'
+    return f'<section><h2>Panorama</h2>{"".join(grupos)}</section>'
 
 
 def seccion_alertas(resultados, metricas):
@@ -176,14 +229,17 @@ def seccion_alertas(resultados, metricas):
         sev = regla.get("severidad", "info")
         if sev not in ETIQUETA_SEVERIDAD:
             sev = "info"
+        # Aunque la regla se haya activado por el precio del SIC (liquidez), los números que
+        # se ven son los de su mercado de origen, que son los confiables.
+        visibles = [uni.cara_de_origen(metricas[t], metricas) for t in b["coincidencias"]]
         filas = "".join(
-            fila(metricas[t], [
-                ("RSI", esc(rsi_txt(metricas[t]["rsi14"]))),
-                ("1M", pct_html(metricas[t]["ret_1m"])),
-                ("vs máx. 52s", pct_html(metricas[t]["dd_desde_max52"])),
-                ("Vol. anual", f'{num(metricas[t]["vol_anual"], 1)}%'),
+            fila(m, [
+                ("RSI", esc(rsi_txt(m["rsi14"]))),
+                ("1M", pct_html(m["ret_1m"])),
+                ("vs máx. 52s", pct_html(m["dd_desde_max52"])),
+                ("Vol. anual", f'{num(m["vol_anual"], 1)}%'),
             ])
-            for t in b["coincidencias"]
+            for m in visibles
         )
         titulo = (f'<span class="etq {sev}">{ETIQUETA_SEVERIDAD[sev]}</span>'
                   f'{esc(regla.get("descripcion", regla.get("id", "")))}')
@@ -195,36 +251,41 @@ def seccion_mercado(universo, categorias, metricas):
     bloques = []
     primero = True
     for clave, titulo in categorias:
-        entradas = [e for e in universo.get(clave, []) if e["ticker"] in metricas]
-        if not entradas:
+        # Los valores del SIC se muestran con los datos de su mercado de origen.
+        mostrados = [uni.principal(e, metricas) for e in universo.get(clave, [])]
+        mostrados = [m for m in mostrados if m]
+        if not mostrados:
             continue
-        entradas.sort(key=lambda e: metricas[e["ticker"]]["ret_1m"] if metricas[e["ticker"]]["ret_1m"] is not None else -999,
-                      reverse=True)
+        mostrados.sort(key=lambda m: m["ret_1m"] if m["ret_1m"] is not None else -999, reverse=True)
         filas = "".join(
-            fila(metricas[e["ticker"]], [
-                ("5D", pct_html(metricas[e["ticker"]]["ret_5d"])),
-                ("1M", pct_html(metricas[e["ticker"]]["ret_1m"])),
-                ("3M", pct_html(metricas[e["ticker"]]["ret_3m"])),
-                ("Año", pct_html(metricas[e["ticker"]]["ret_ytd"])),
-                ("12M", pct_html(metricas[e["ticker"]]["ret_1a"])),
-                ("RSI", esc(rsi_txt(metricas[e["ticker"]]["rsi14"]))),
-                ("Vol. anual", f'{num(metricas[e["ticker"]]["vol_anual"], 1)}%'),
-                ("vs máx. 52s", pct_html(metricas[e["ticker"]]["dd_desde_max52"])),
+            fila(m, [
+                ("5D", pct_html(m["ret_5d"])),
+                ("1M", pct_html(m["ret_1m"])),
+                ("3M", pct_html(m["ret_3m"])),
+                ("Año", pct_html(m["ret_ytd"])),
+                ("12M", pct_html(m["ret_1a"])),
+                ("RSI", esc(rsi_txt(m["rsi14"]))),
+                ("Vol. anual", f'{num(m["vol_anual"], 1)}%'),
+                ("vs máx. 52s", pct_html(m["dd_desde_max52"])),
             ])
-            for e in entradas
+            for m in mostrados
         )
-        bloques.append(bloque(esc(titulo), filas, abierto=primero, cuenta=len(entradas)))
+        bloques.append(bloque(esc(titulo), filas, abierto=primero, cuenta=len(mostrados)))
         primero = False
     if not bloques:
         return ""
     nota = ('<p class="nota-pie">Ordenado por rendimiento del último mes. '
-            "▲/▼ = tendencia (media de 50 vs 200 sesiones). ⚠ = datos poco confiables por baja liquidez.</p>")
+            "▲/▼ = tendencia (media de 50 vs 200 sesiones). Los valores de EE. UU. se muestran en dólares, "
+            "con los datos de su mercado de origen; la línea «En GBM+» indica con qué ticker se compran "
+            "en el SIC y a qué precio en pesos. ⚠ = ese precio del SIC es poco confiable por baja liquidez.</p>")
     return f'<section><h2>Mercado</h2>{"".join(bloques)}{nota}</section>'
 
 
 def seccion_extremos(metricas):
-    elegibles = [m for t, m in metricas.items()
-                 if m["ret_1m"] is not None and t not in ("MXN=X", "^MXX")]
+    # Un renglón por instrumento invertible: los del SIC entran con los datos de su origen,
+    # sin sectores ni índices.
+    elegibles = [m for m in uni.representantes(metricas)
+                 if m["ret_1m"] is not None and m.get("categoria") in uni.CATEGORIAS_EXTREMOS]
     if len(elegibles) < 2:
         return ""
     ordenados = sorted(elegibles, key=lambda m: m["ret_1m"], reverse=True)
@@ -238,10 +299,13 @@ def seccion_extremos(metricas):
             for m in grupo
         )
 
+    nota = ('<p class="nota-pie">Acciones y ETFs invertibles. Cada rendimiento va en la moneda en que '
+            "cotiza: pesos en la BMV, dólares en EE. UU.</p>")
     return (
         "<section><h2>Extremos del mes</h2>"
         + bloque("Los que más subieron", filas(ordenados[:k]), cuenta=k)
         + bloque("Los que más cayeron", filas(ordenados[-k:][::-1]), cuenta=k)
+        + nota
         + "</section>"
     )
 
@@ -298,7 +362,9 @@ def seccion_calidad(metricas):
     explicacion = (
         '<p class="nota-pie">Los instrumentos del SIC operan con mucho menos volumen que en su mercado '
         "de origen. Si una sesión cierra sin operaciones, el precio anterior se arrastra y el rendimiento "
-        "aparece como 0%: eso subestima la volatilidad y distorsiona las correlaciones.</p>"
+        "aparece como 0%: eso subestima la volatilidad y distorsiona las correlaciones. Por eso los "
+        "indicadores de cada valor del SIC se calculan sobre su mercado de origen; aquí se listan los "
+        "precios locales (los que verías en GBM+) que pueden estar rezagados respecto al de origen.</p>"
     )
     if not sospechosos:
         return ('<section><h2>Calidad de datos</h2><p class="vacio">Todas las series operaron con regularidad.</p>'
@@ -381,9 +447,13 @@ details[open]>summary::after{transform:rotate(90deg)}
 .id{min-width:0}
 .nombre{display:block; color:var(--suave); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .aviso{display:block; font-size:12px; color:var(--sev-media); font-weight:600}
+.via{display:block; color:var(--suave); font-size:12px}
+.via b{color:var(--texto)}
 .der{text-align:right; flex-shrink:0; font-variant-numeric:tabular-nums}
 .precio{display:block; font-weight:700}
 .dia{display:block; font-size:13px}
+.desfase{display:block; color:var(--sev-media)}
+h3.grupo{font-size:13px; color:var(--suave); margin:16px 4px 8px; font-weight:600}
 .corr span{display:block; font-size:14px}
 .met{display:grid; grid-template-columns:repeat(4,1fr); gap:8px 10px; margin:10px 0 0}
 .met div{min-width:0}
@@ -395,6 +465,10 @@ dd{margin:0; font-weight:600; font-size:14px; font-variant-numeric:tabular-nums}
 footer{margin-top:32px; color:var(--suave); font-size:12px}
 footer p{margin:8px 0}
 
+/* En el teléfono (2 columnas), una tarjeta suelta al final ocupa el ancho completo. */
+@media (max-width:699px){
+  .rejilla .tarjeta:last-child:nth-child(odd){grid-column:1/-1}
+}
 @media (min-width:700px){
   .rejilla{grid-template-columns:repeat(4,1fr)}
   .met{grid-template-columns:repeat(8,1fr)}
@@ -427,7 +501,9 @@ def construir_pagina(universo, categorias, metricas, resultados, correlaciones, 
                      noticias_ticker, noticias_mercado, solicitados, errores, rango):
     ahora = datetime.now(CDMX)
 
-    ultima = max((m["ultima_fecha"] for m in metricas.values()), default=None)
+    # "Datos al" según el último cierre que trae la MAYORÍA de las series, no el más
+    # reciente: un índice con la barra del día en curso adelantaría la fecha de todo.
+    ultima = uni.fecha_dominante(metricas)
     datos_al = "—"
     if ultima:
         d = datetime.strptime(ultima, "%Y-%m-%d")
@@ -439,7 +515,7 @@ def construir_pagina(universo, categorias, metricas, resultados, correlaciones, 
         incidencias = bloque("Incidencias de la corrida", filas_error, cuenta=len(errores))
 
     cuerpo = "".join([
-        seccion_panorama(metricas),
+        seccion_panorama(universo, metricas),
         seccion_alertas(resultados, metricas),
         seccion_mercado(universo, categorias, metricas),
         seccion_extremos(metricas),

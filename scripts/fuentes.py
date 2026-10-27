@@ -29,6 +29,8 @@ from pathlib import Path
 UA = {"User-Agent": "Mozilla/5.0 (compatible; gbm-research/1.0)"}
 TIMEOUT = 20
 PAUSA_ENTRE_LLAMADAS = 0.2  # segundos, para no saturar Yahoo
+INTENTOS = 3                # intentos por descarga de precios ante fallos pasajeros
+PAUSA_REINTENTO = 1.5       # segundos de espera antes de volver a intentar
 
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{sym}?range={rango}&interval=1d"
 YAHOO_NEWS = "https://feeds.finance.yahoo.com/rss/2.0/headline?s={sym}&region=MX&lang=es-MX"
@@ -52,6 +54,26 @@ def _get(url, headers=None):
     req = urllib.request.Request(url, headers=headers or UA)
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
         return r.read()
+
+
+def _get_con_reintento(url):
+    """
+    GET que reintenta ante fallos pasajeros de red (Yahoo a veces corta la conexión sin
+    responder; con ~70 descargas por corrida pasa de vez en cuando). Un error 4xx como
+    404 (ticker inexistente) no se reintenta: esperar no lo arregla. El 429 (Yahoo pide
+    ir más lento) sí, pero con la misma pausa de siempre.
+    """
+    for intento in range(1, INTENTOS + 1):
+        try:
+            return _get(url)
+        except urllib.error.HTTPError as e:
+            definitivo = 400 <= e.code < 500 and e.code != 429
+            if definitivo or intento == INTENTOS:
+                raise
+        except Exception:
+            if intento == INTENTOS:
+                raise
+        time.sleep(PAUSA_REINTENTO)
 
 
 def _ruta_cache(cache_dir, clave):
@@ -107,7 +129,7 @@ def descargar_precios(ticker, rango="1y", cache_dir=None, ttl_min=60):
     if crudo is None:
         url = YAHOO_CHART.format(sym=urllib.parse.quote(ticker, safe=""), rango=rango)
         try:
-            crudo = json.loads(_get(url))
+            crudo = json.loads(_get_con_reintento(url))
             _escribir_cache(cache_dir, clave, crudo)
             time.sleep(PAUSA_ENTRE_LLAMADAS)
         except Exception as e:
