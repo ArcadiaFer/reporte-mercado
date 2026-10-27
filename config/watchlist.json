@@ -82,14 +82,14 @@
 
   "_nota_reglas": "Métricas disponibles: precio, ret_1d, ret_5d, ret_1m, ret_3m, ret_6m, ret_ytd, ret_1a, rsi14, vol_anual, dd_desde_max52, drawdown_max, sma50, sma200, tendencia (alcista|bajista), pct_repetidos, pct_sin_volumen, liquidez (ok|baja|muy_baja). Usa 'valor' para comparar contra un número y 'ref' para comparar contra otra métrica.",
 
-  "_nota_categorias": "Cada regla puede traer categorias para aplicarse solo a esos grupos; sin el campo aplica a todos. Grupos: bmv, referencia (IPC y USD/MXN), etf_us y accion_us (el mercado de ORIGEN de los valores del SIC: es donde se corren los indicadores tecnicos), sector_us, etf_sic y accion_sic (la cotizacion local en pesos). Los indices de EE. UU. (S&P, VIX, bono a 10 anios) nunca entran al screening.",
+  "_nota_categorias": "Cada regla puede traer categorias para aplicarse solo a esos grupos; sin el campo aplica a todos. Grupos: bmv, referencia (IPC y USD/MXN), etf_us y accion_us (el mercado de ORIGEN de los valores del SIC: es donde se corren los indicadores tecnicos), lista_us y lista_sic (lo mismo para tu lista propia de config/seguimiento_eeuu.txt), sector_us, etf_sic y accion_sic (la cotizacion local en pesos). Los indices de EE. UU. (S&P, VIX, bono a 10 anios) nunca entran al screening.",
 
   "reglas": [
     {
       "id": "liquidez_insuficiente",
       "descripcion": "Liquidez muy baja en el SIC — el precio local puede alejarse del de origen",
       "severidad": "alta",
-      "categorias": ["bmv", "referencia", "etf_sic", "accion_sic"],
+      "categorias": ["bmv", "referencia", "etf_sic", "accion_sic", "lista_sic"],
       "logica": "y",
       "condiciones": [{ "metrica": "liquidez", "op": "==", "valor": "muy_baja" }]
     },
@@ -97,7 +97,7 @@
       "id": "sobreventa",
       "descripcion": "RSI14 bajo 30 — zona de sobreventa técnica",
       "severidad": "media",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "rsi14", "op": "<", "valor": 30 }]
     },
@@ -105,7 +105,7 @@
       "id": "sobrecompra",
       "descripcion": "RSI14 sobre 70 — zona de sobrecompra técnica",
       "severidad": "media",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "rsi14", "op": ">", "valor": 70 }]
     },
@@ -113,7 +113,7 @@
       "id": "correccion_profunda",
       "descripcion": "Más de 20% abajo de su máximo de 52 semanas",
       "severidad": "alta",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "dd_desde_max52", "op": "<", "valor": -20 }]
     },
@@ -121,7 +121,7 @@
       "id": "maximos_52",
       "descripcion": "A menos de 2% de su máximo de 52 semanas",
       "severidad": "baja",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "dd_desde_max52", "op": ">", "valor": -2 }]
     },
@@ -129,7 +129,7 @@
       "id": "tendencia_alcista_confirmada",
       "descripcion": "Precio sobre SMA200 y SMA50 sobre SMA200",
       "severidad": "info",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [
         { "metrica": "precio", "op": ">", "ref": "sma200" },
@@ -140,7 +140,7 @@
       "id": "tendencia_bajista_confirmada",
       "descripcion": "Precio bajo SMA200 y SMA50 bajo SMA200",
       "severidad": "alta",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [
         { "metrica": "precio", "op": "<", "ref": "sma200" },
@@ -151,7 +151,7 @@
       "id": "volatilidad_elevada",
       "descripcion": "Volatilidad anualizada sobre 40%",
       "severidad": "media",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "vol_anual", "op": ">", "valor": 40 }]
     },
@@ -159,7 +159,7 @@
       "id": "caida_semanal_fuerte",
       "descripcion": "Caída mayor a 7% en 5 sesiones",
       "severidad": "alta",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [{ "metrica": "ret_5d", "op": "<", "valor": -7 }]
     },
@@ -167,7 +167,7 @@
       "id": "rebote_desde_sobreventa",
       "descripcion": "Rebote: RSI todavía bajo 45 pero con alza en la semana",
       "severidad": "baja",
-      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "sector_us"],
+      "categorias": ["bmv", "referencia", "etf_us", "accion_us", "lista_us", "sector_us"],
       "logica": "y",
       "condiciones": [
         { "metrica": "rsi14", "op": "<", "valor": 45 },

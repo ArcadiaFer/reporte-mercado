@@ -124,6 +124,9 @@ def fila(m, celdas):
         nivel_liquidez, donde = m.get("liquidez"), ""
     texto_aviso = {"muy_baja": "liquidez muy baja", "baja": "liquidez baja"}.get(nivel_liquidez)
     aviso = f'<span class="aviso">⚠ {texto_aviso}{donde}</span>' if texto_aviso else ""
+    # Valor de "Mi lista" sin versión en el SIC: se puede seguir, pero no comprar en GBM+.
+    if m.get("sin_sic"):
+        aviso += '<span class="aviso">⚠ no aparece en el SIC (según Yahoo)</span>'
 
     moneda = f' <small>{esc(m["moneda"])}</small>' if uni.cotiza_con_moneda(m) else ""
     # Si el último cierre de esta serie no es el de la mayoría, se dice cuál es.
@@ -279,6 +282,33 @@ def seccion_mercado(universo, categorias, metricas):
             "con los datos de su mercado de origen; la línea «En GBM+» indica con qué ticker se compran "
             "en el SIC y a qué precio en pesos. ⚠ = ese precio del SIC es poco confiable por baja liquidez.</p>")
     return f'<section><h2>Mercado</h2>{"".join(bloques)}{nota}</section>'
+
+
+def seccion_mi_lista(universo, avisos, enlace):
+    """
+    Ayuda para la lista propia: cuántos valores lleva, un botón para editarla en github.com
+    y los avisos de la última corrida (un ticker mal escrito, uno repetido, uno sin SIC...).
+    Los valores en sí se muestran en el bloque «Mi lista de EE. UU.» de la sección Mercado.
+    """
+    url = enlace_seguro(enlace)
+    n = len(universo.get("lista_us", []))
+    if not (n or avisos or url):
+        return ""
+
+    if n:
+        estado = f"Sigues {n} valor{'es' if n != 1 else ''} de EE. UU. en tu lista."
+    else:
+        estado = "Aún no has agregado ningún valor de EE. UU."
+    cuerpo = (
+        f"<p>{estado} Para agregar o quitar, edita tu lista: un ticker de EE. UU. por línea "
+        "(por ejemplo PLTR o BRK-B). Al guardar, esta página se actualiza sola en unos 2 minutos.</p>"
+    )
+    if url:
+        cuerpo += (f'<a class="boton" href="{esc(url)}" target="_blank" '
+                   'rel="noopener noreferrer">Editar mi lista</a>')
+    if avisos:
+        cuerpo += '<ul class="avisos">' + "".join(f"<li>{esc(a)}</li>" for a in avisos) + "</ul>"
+    return f'<section><h2>Mi lista</h2><div class="ayuda">{cuerpo}</div></section>'
 
 
 def seccion_extremos(metricas):
@@ -459,6 +489,11 @@ h3.grupo{font-size:13px; color:var(--suave); margin:16px 4px 8px; font-weight:60
 .met div{min-width:0}
 dt{font-size:11px; color:var(--suave); text-transform:uppercase; letter-spacing:.04em}
 dd{margin:0; font-weight:600; font-size:14px; font-variant-numeric:tabular-nums}
+.ayuda{background:var(--tarjeta); border:1px solid var(--linea); border-radius:14px; padding:14px 16px}
+.ayuda p{margin:0 0 12px; font-size:15px}
+.boton{display:inline-block; min-height:44px; line-height:44px; padding:0 20px; border-radius:12px;
+   background:var(--acento); color:var(--fondo); font-weight:700; text-decoration:none}
+.avisos{margin:12px 0 0; padding-left:20px; color:var(--sev-media); font-size:14px}
 .nota{padding:12px 16px; border-top:1px solid var(--linea); font-size:15px}
 .nota a{text-decoration:none}
 .nota-pie{color:var(--suave); font-size:13px; margin:8px 6px 0}
@@ -498,7 +533,8 @@ SCRIPT_ANTIGUEDAD = """
 # ---------------------------------------------------------------------------
 
 def construir_pagina(universo, categorias, metricas, resultados, correlaciones, macro, hay_token,
-                     noticias_ticker, noticias_mercado, solicitados, errores, rango):
+                     noticias_ticker, noticias_mercado, solicitados, errores, rango,
+                     avisos_lista=(), enlace_lista=None):
     ahora = datetime.now(CDMX)
 
     # "Datos al" según el último cierre que trae la MAYORÍA de las series, no el más
@@ -518,6 +554,7 @@ def construir_pagina(universo, categorias, metricas, resultados, correlaciones, 
         seccion_panorama(universo, metricas),
         seccion_alertas(resultados, metricas),
         seccion_mercado(universo, categorias, metricas),
+        seccion_mi_lista(universo, avisos_lista, enlace_lista),
         seccion_extremos(metricas),
         seccion_correlaciones(correlaciones),
         seccion_macro(macro, hay_token),

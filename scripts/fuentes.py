@@ -114,7 +114,7 @@ def _escribir_cache(cache_dir, clave, payload):
 # Precios (Yahoo Finance)
 # ---------------------------------------------------------------------------
 
-def descargar_precios(ticker, rango="1y", cache_dir=None, ttl_min=60):
+def descargar_precios(ticker, rango="1y", cache_dir=None, ttl_min=60, silencioso=False):
     """
     Descarga la serie diaria de un ticker.
 
@@ -122,7 +122,15 @@ def descargar_precios(ticker, rango="1y", cache_dir=None, ttl_min=60):
       ticker, nombre, moneda, bolsa, fechas (list[date ISO]),
       cierres (list[float]), volumenes (list[int|None])
     o None si falla.
+
+    `silencioso=True` no anota el fallo en ERRORES: sirve para PROBAR si un ticker
+    existe (¿tiene versión .MX en el SIC?), donde "no existe" es una respuesta válida
+    y no una incidencia de la corrida.
     """
+    def fallo(contexto, exc):
+        if not silencioso:
+            _registrar_error(contexto, exc)
+
     clave = f"{ticker}_{rango}"
     crudo = _leer_cache(cache_dir, clave, ttl_min)
 
@@ -133,7 +141,7 @@ def descargar_precios(ticker, rango="1y", cache_dir=None, ttl_min=60):
             _escribir_cache(cache_dir, clave, crudo)
             time.sleep(PAUSA_ENTRE_LLAMADAS)
         except Exception as e:
-            _registrar_error(f"precios {ticker}", e)
+            fallo(f"precios {ticker}", e)
             return None
 
     try:
@@ -153,7 +161,7 @@ def descargar_precios(ticker, rango="1y", cache_dir=None, ttl_min=60):
             volumenes.append(vols_crudos[i] if i < len(vols_crudos) else None)
 
         if not cierres:
-            _registrar_error(f"precios {ticker}", ValueError("serie vacía"))
+            fallo(f"precios {ticker}", ValueError("serie vacía"))
             return None
 
         return {
@@ -166,7 +174,7 @@ def descargar_precios(ticker, rango="1y", cache_dir=None, ttl_min=60):
             "volumenes": volumenes,
         }
     except Exception as e:
-        _registrar_error(f"parseo {ticker}", e)
+        fallo(f"parseo {ticker}", e)
         return None
 
 

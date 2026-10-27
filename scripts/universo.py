@@ -19,6 +19,9 @@ CATEGORIAS = [
     ("bmv", "Acciones BMV"),
     ("etf_sic", "ETFs de EE. UU. (vía SIC)"),
     ("accion_sic", "Acciones de EE. UU. (vía SIC)"),
+    # La lista propia del usuario (config/seguimiento_eeuu.txt). No viene del JSON: la arma
+    # seguimiento.py en cada corrida y la agrega al universo en memoria.
+    ("lista_us", "Mi lista de EE. UU."),
     ("sector_us", "Sectores de EE. UU. (referencia)"),
     ("referencia", "Referencias de México"),
     ("indice_us", "Índices de EE. UU."),
@@ -28,16 +31,23 @@ CATEGORIAS = [
 # solo aparecen como tarjetas del panorama: no son algo que se compre.
 CATEGORIAS_LISTADO = [c for c in CATEGORIAS if c[0] != "indice_us"]
 
-# Qué categoría toma el ticker de ORIGEN de cada categoría del SIC.
-CATEGORIA_ORIGEN = {"etf_sic": "etf_us", "accion_sic": "accion_us"}
+# Qué categoría toma la cara de ORIGEN (EE. UU.) de cada categoría que trae pares SIC.
+CATEGORIA_ORIGEN = {"etf_sic": "etf_us", "accion_sic": "accion_us", "lista_us": "lista_us"}
+
+# En la lista propia la categoría es la misma para ambas caras del par, así que la cara
+# SIC necesita un nombre distinto: las reglas técnicas corren sobre la de origen
+# ("lista_us") y la de liquidez sobre la del SIC ("lista_sic"). En etf_sic y accion_sic
+# no hace falta: ahí la clave del watchlist ya es la de la cara SIC.
+CATEGORIA_SIC = {"lista_us": "lista_sic"}
 
 # Categorías que entran a los "extremos del mes": una por instrumento invertible,
 # sin sectores (son referencia) ni índices.
-CATEGORIAS_EXTREMOS = {"bmv", "etf_sic", "etf_us", "accion_sic", "accion_us"}
+CATEGORIAS_EXTREMOS = {"bmv", "etf_sic", "etf_us", "accion_sic", "accion_us", "lista_us", "lista_sic"}
 
 # Categorías cuyo precio es dinero (se muestra con su moneda). Las demás son
 # niveles de índice o tipos de cambio, donde "USD" o "MXN" confundiría.
-CATEGORIAS_CON_MONEDA = {"bmv", "etf_sic", "accion_sic", "etf_us", "accion_us", "sector_us"}
+CATEGORIAS_CON_MONEDA = {"bmv", "etf_sic", "accion_sic", "etf_us", "accion_us", "sector_us",
+                         "lista_us", "lista_sic"}
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +108,7 @@ def anotar(universo, metricas):
       categoria        a qué grupo pertenece
       nombre           el del watchlist (más legible que la razón social de Yahoo)
       tipo             'tasa' (rendimiento de un bono) o 'volatilidad' (VIX) si aplica
+      sin_sic          True si es un valor de la lista propia que no se encontró en el SIC
       origen           (solo cara SIC) ticker de origen cuya serie está disponible
       sic_*            (solo cara de origen) ticker, precio y liquidez de su versión SIC
       fecha_distinta   su último cierre, si difiere del que trae la mayoría
@@ -125,9 +136,12 @@ def anotar(universo, metricas):
             m = metricas.get(e["ticker"])
             if not m:
                 continue
-            m["categoria"] = clave
+            # Una entrada con "origen" es la cara SIC de un par; su categoría puede ser otra
+            # que la de la clave (ver CATEGORIA_SIC). Sin "origen" es una serie normal.
+            m["categoria"] = CATEGORIA_SIC.get(clave, clave) if e.get("origen") else clave
             m["nombre"] = e["nombre"]
             m["tipo"] = e.get("tipo")
+            m["sin_sic"] = bool(e.get("sin_sic"))
 
     dominante = fecha_dominante(metricas)
     for m in metricas.values():

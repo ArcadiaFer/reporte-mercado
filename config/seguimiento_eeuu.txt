@@ -1,0 +1,21 @@
+# MI LISTA DE EE. UU.
+#
+# Escribe aquí las acciones y ETFs de EE. UU. que quieras seguir en el reporte.
+#
+#   - Un ticker por línea (o varios separados por coma). Mayúsculas o minúsculas, da igual.
+#   - Usa el ticker de EE. UU., sin ".MX": por ejemplo PLTR, VEA, BRK-B.
+#     La versión del SIC (la que compras en GBM+) se busca sola.
+#   - Todo lo que va después de un "#" es un comentario y se ignora.
+#   - Máximo 30 valores.
+#
+# Al guardar este archivo en GitHub, el reporte se vuelve a generar solo y en unos
+# 2 minutos la página ya muestra tus valores, con sus alertas, en el bloque
+# "Mi lista de EE. UU.". Si algo está mal escrito, la página te lo avisa en la
+# sección "Mi lista".
+#
+# Para quitar un valor, borra su línea o ponle un "#" al inicio.
+#
+# Ejemplos (quita el "#" para activarlos):
+# PLTR
+# VEA
+# BRK-B

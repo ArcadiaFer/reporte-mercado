@@ -28,6 +28,7 @@ import fuentes
 import indicadores as ind
 import pagina_web
 import screening as scr
+import seguimiento
 import universo as uni
 
 RAIZ = Path(__file__).resolve().parent.parent
@@ -63,6 +64,11 @@ def parse_args():
     p.add_argument("--web", default=None,
                    help="Además del Markdown, genera la página HTML para celular en esta ruta "
                         "(ej. docs/index.html)")
+    p.add_argument("--lista", default=str(RAIZ / seguimiento.RUTA_RELATIVA),
+                   help="Archivo con tu lista de valores de EE. UU. a seguir "
+                        "(un ticker por línea). Default: config/seguimiento_eeuu.txt")
+    p.add_argument("--sin-lista", action="store_true",
+                   help="No incluye tu lista de EE. UU. (con --tickers tampoco se incluye)")
     p.add_argument("--sin-noticias", action="store_true",
                    help="Omite la descarga de titulares (corre más rápido)")
     p.add_argument("--max-noticias", type=int, default=6,
@@ -176,6 +182,8 @@ def etiqueta_ticker(m):
     texto = f"`{m['ticker']}`"
     if m.get("sic_ticker"):
         texto += f" (GBM+: `{m['sic_ticker']}`{marca_liquidez(m.get('sic_liquidez'))})"
+    elif m.get("sin_sic"):
+        texto += " (no aparece en el SIC)"
     else:
         texto += marca_liquidez(m.get("liquidez"))
     if m.get("fecha_distinta"):
@@ -215,12 +223,16 @@ def seccion_panorama(universo, metricas, lineas):
         )
 
 
-def seccion_tabla_maestra(universo, metricas, lineas):
+def seccion_tabla_maestra(universo, metricas, lineas, avisos_lista=()):
     lineas.append("## 2. Tabla maestra\n")
     lineas.append(
         "_Los valores del SIC se muestran con los datos de su mercado de origen (USD), que son "
         "los confiables; entre paréntesis va el ticker con el que se compran en GBM+._\n"
     )
+    if avisos_lista:
+        lineas.append("**Avisos sobre tu lista de EE. UU.** (`config/seguimiento_eeuu.txt`):\n")
+        lineas += [f"- {a}" for a in avisos_lista]
+        lineas.append("")
     for clave, titulo in uni.CATEGORIAS_LISTADO:
         mostrados = [uni.principal(e, metricas) for e in universo.get(clave, [])]
         mostrados = [m for m in mostrados if m]
@@ -459,7 +471,7 @@ def seccion_diagnostico(datos, solicitados, lineas):
 # ---------------------------------------------------------------------------
 
 def construir_reporte(cfg, datos, metricas, resultados, macro, hay_token,
-                      noticias_ticker, noticias_mkt, solicitados, rango):
+                      noticias_ticker, noticias_mkt, solicitados, rango, avisos_lista=()):
     ahora = datetime.now()
     lineas = [
         "# Reporte de Research — Universo GBM",
@@ -474,7 +486,7 @@ def construir_reporte(cfg, datos, metricas, resultados, macro, hay_token,
     ]
 
     seccion_panorama(cfg["universo"], metricas, lineas)
-    seccion_tabla_maestra(cfg["universo"], metricas, lineas)
+    seccion_tabla_maestra(cfg["universo"], metricas, lineas, avisos_lista)
     seccion_screening(resultados, metricas, lineas)
     seccion_extremos(metricas, lineas)
     seccion_correlaciones(datos, metricas, lineas)
@@ -525,6 +537,16 @@ def main():
         print("ERROR: no se descargo ninguna serie. Revisa tu conexion.")
         return 1
 
+    # Tu lista propia de EE. UU. Se suma al universo en memoria (el watchlist.json no se
+    # toca). Con --tickers se corre justo lo pedido, así que la lista no entra.
+    avisos_lista = []
+    if not args.sin_lista and not args.tickers:
+        entradas, series, avisos_lista, pedidos_lista = seguimiento.cargar(
+            args.lista, universo, uni.CATEGORIAS, args.rango, cache_dir, args.ttl)
+        universo["lista_us"] = entradas
+        datos.update(series)
+        pedidos = pedidos + pedidos_lista
+
     print(f"Calculando indicadores sobre {len(datos)} series...")
     metricas = {t: calcular_metricas(s) for t, s in datos.items()}
 
@@ -567,7 +589,7 @@ def main():
 
     reporte = construir_reporte(
         cfg, datos, metricas, resultados, macro, hay_token,
-        noticias_por_ticker, noticias_mkt, pedidos, args.rango,
+        noticias_por_ticker, noticias_mkt, pedidos, args.rango, avisos_lista,
     )
     with open(salida, "w", encoding="utf-8") as f:
         f.write(reporte)
@@ -582,6 +604,7 @@ def main():
             universo, uni.CATEGORIAS_LISTADO, metricas, resultados,
             calcular_correlaciones(datos, metricas), macro, hay_token,
             noticias_por_ticker, noticias_mkt, len(pedidos), fuentes.ERRORES, args.rango,
+            avisos_lista=avisos_lista, enlace_lista=seguimiento.enlace_edicion(),
         )
         ruta_web = Path(args.web)
         ruta_web.parent.mkdir(parents=True, exist_ok=True)

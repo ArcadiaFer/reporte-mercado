@@ -27,6 +27,7 @@ de `config/watchlist.json`.
 scripts/fuentes.py       descarga de datos (Yahoo Finance, Banxico, noticias RSS)
 scripts/indicadores.py   indicadores técnicos y medidas de calidad de datos
 scripts/universo.py      empareja cada valor del SIC con su mercado de origen
+scripts/seguimiento.py   lee y valida tu lista de EE. UU. (config/seguimiento_eeuu.txt)
 scripts/screening.py     motor de reglas (comparaciones sobre números, sin IA)
 scripts/research.py      orquestador: descarga -> indicadores -> reglas -> reporte
 scripts/pagina_web.py    genera la página HTML para celular
@@ -37,6 +38,20 @@ docs/                    la página publicada (GitHub Pages)
 ```
 
 Solo usa la biblioteca estándar de Python: no hay nada que instalar.
+
+## Tu lista de EE. UU.
+
+Además del universo fijo, puedes seguir las acciones y ETFs de EE. UU. que quieras. Escribe sus
+tickers en `config/seguimiento_eeuu.txt` (uno por línea, sin `.MX`; máximo 30) y listo: en la
+siguiente corrida aparecen en el bloque «Mi lista de EE. UU.» con los mismos indicadores y alertas.
+La página tiene un botón «Editar mi lista» que abre ese archivo en github.com, así que se puede
+hacer desde el celular; al guardar, la página se actualiza sola en unos 2 minutos.
+
+Cada valor se revisa solo: si existe en Yahoo Finance, si tiene versión en el SIC (la que se
+compra en GBM+, por ejemplo `BRK-B` → `BRKB.MX`) y qué tan activo es ese precio. Si algo está mal
+escrito, está repetido o no aparece en el SIC, la sección «Mi lista» de la página lo avisa. Que
+un valor tenga versión `.MX` en Yahoo no garantiza que tu casa de bolsa lo ofrezca: confírmalo
+antes de operar.
 
 ## Usarlo en tu computadora
 
