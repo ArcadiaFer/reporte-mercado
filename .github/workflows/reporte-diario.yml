@@ -1,24 +1,33 @@
 name: Reporte diario
 
 on:
-  # 12:07 UTC = 06:07 hora de Ciudad de México (UTC-6 todo el año, sin horario de verano).
-  # GitHub puede retrasar las tareas programadas unos 10-30 min en horas de mucha carga.
+  # Hora de Ciudad de México = UTC-6 todo el año (sin horario de verano).
+  # GitHub trata las tareas programadas como "mejor esfuerzo": las puede retrasar 10-30 min
+  # y, de vez en cuando, saltarse alguna. Por eso hay DOS horas y una sola página al día:
   schedule:
+    # Principal: 12:07 UTC = 06:07 en CDMX. Siempre corre.
     - cron: "7 12 * * 1-5"
+    # Respaldo: 12:47 UTC = 06:47 en CDMX. Solo corre si todavía no hay página de hoy
+    # (lo decide el paso "Decidir si hace falta correr"). Si el texto de este cron cambia,
+    # hay que cambiarlo también en ese paso.
+    - cron: "47 12 * * 1-5"
   # Botón "Run workflow" en la pestaña Actions, para probarlo a mano.
   workflow_dispatch:
-  # Al subir cambios al código se regenera la página (el commit del propio robot solo toca
-  # docs/, que no está en esta lista, así que no se dispara en bucle).
+  # Al subir cambios al código o a tu lista de EE. UU. se regenera la página (el commit del
+  # propio robot solo toca docs/, que no está en esta lista, así que no se dispara en bucle).
   push:
     branches: [main]
     paths:
       - "scripts/**"
       - "config/**"
+      - "tools/**"
       - ".github/workflows/reporte-diario.yml"
 
 permissions:
   contents: write   # necesario para que el robot guarde docs/index.html en el repositorio
 
+# Si el respaldo arranca mientras la principal sigue trabajando, espera su turno; para cuando
+# le toque, la página ya estará publicada y el respaldo se salta solo.
 concurrency:
   group: reporte-diario
   cancel-in-progress: false
@@ -34,7 +43,27 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Decidir si hace falta correr
+        id: decidir
+        env:
+          EVENTO: ${{ github.event_name }}
+          CRON: ${{ github.event.schedule }}
+        run: |
+          # Solo el respaldo puede saltarse. Cualquier otra causa (la principal, un push, el
+          # botón manual) siempre corre.
+          omitir=false
+          if [ "$EVENTO" = "schedule" ] && [ "$CRON" = "47 12 * * 1-5" ]; then
+            if [ "$(python tools/ya_publicado.py docs/index.html)" = "si" ]; then
+              omitir=true
+              echo "La página de hoy ya está publicada: el respaldo no tiene nada que hacer."
+            else
+              echo "Todavía no hay página de hoy: el respaldo la genera."
+            fi
+          fi
+          echo "omitir=$omitir" >> "$GITHUB_OUTPUT"
+
       - name: Generar reporte y página
+        if: steps.decidir.outputs.omitir != 'true'
         env:
           # Opcional: si guardas tu token de Banxico como secreto del repositorio, aparece la
           # sección macro. Sin él, simplemente se omite.
@@ -42,6 +71,7 @@ jobs:
         run: python scripts/research.py --ttl 0 --web docs/index.html --salida "$RUNNER_TEMP/reporte.md"
 
       - name: Publicar en el repositorio
+        if: steps.decidir.outputs.omitir != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -32,6 +32,7 @@ scripts/screening.py     motor de reglas (comparaciones sobre números, sin IA)
 scripts/research.py      orquestador: descarga -> indicadores -> reglas -> reporte
 scripts/pagina_web.py    genera la página HTML para celular
 tools/generar_icono.py   genera los iconos de la página
+tools/ya_publicado.py    dice si la página de hoy ya se generó (lo usa el respaldo de las 06:47)
 config/watchlist.json    universo de seguimiento y reglas
 docs/                    la página publicada (GitHub Pages)
 .github/workflows/       tarea diaria que regenera la página
@@ -65,7 +66,15 @@ python scripts/research.py --tickers WALMEX.MX,VOO.MX --sin-noticias
 
 El flujo `.github/workflows/reporte-diario.yml` corre de lunes a viernes a las 06:07 (hora de
 Ciudad de México), regenera `docs/index.html` y lo guarda en el repositorio; GitHub Pages sirve la
-carpeta `docs/`. También se puede lanzar a mano desde la pestaña **Actions → Run workflow**.
+carpeta `docs/`. También se puede lanzar a mano desde la pestaña **Actions → Run workflow**, y se
+dispara solo cada vez que se guardan cambios en `scripts/`, `config/` (incluida tu lista de
+EE. UU.) o `tools/`.
+
+GitHub trata las tareas programadas como «mejor esfuerzo»: a veces las retrasa y de vez en cuando
+se salta alguna. Por eso hay una segunda corrida de **respaldo a las 06:47**. Antes de trabajar,
+revisa si la página ya se generó hoy (`tools/ya_publicado.py` lee la marca de fecha del propio
+HTML): si la de las 06:07 cumplió, el respaldo no hace nada; si no, genera la página. La corrida
+de las 06:07, el botón manual y los cambios de código siempre corren.
 
 Para incluir la sección de macro (Banxico), guarda tu token gratuito como secreto del repositorio
 con el nombre `BANXICO_TOKEN` (Settings → Secrets and variables → Actions).
