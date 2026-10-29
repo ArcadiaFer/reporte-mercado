@@ -1,10 +1,11 @@
 """
-¿Ya hay una página de hoy?  Lo usa el respaldo del flujo diario.
+¿Ya hay una página de hoy?  Lo usan las corridas programadas (respaldo) del flujo diario.
 
 Lee la marca `data-generado` que pagina_web.py escribe dentro de docs/index.html y dice
 "si" cuando la página se generó HOY (hora de Ciudad de México) a partir de la hora de
-corte. Con eso, la corrida de respaldo de las 6:47 sabe si la principal de las 6:07 ya
-cumplió y puede saltarse el trabajo.
+corte. Con eso, una corrida programada que GitHub ejecuta tarde sabe que el disparo de
+las 6:00 desde el iPhone ya cumplió y puede saltarse el trabajo, en vez de reemplazar la
+página de la mañana por una de mediodía.
 
 Ante cualquier duda (archivo ausente, marca ilegible, sin zona horaria, fecha del futuro)
 dice "no": es preferible generar una página de más que dejar al usuario sin la de hoy.

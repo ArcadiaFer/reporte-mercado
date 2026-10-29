@@ -2,16 +2,20 @@ name: Reporte diario
 
 on:
   # Hora de Ciudad de México = UTC-6 todo el año (sin horario de verano).
-  # GitHub trata las tareas programadas como "mejor esfuerzo": las puede retrasar 10-30 min
-  # y, de vez en cuando, saltarse alguna. Por eso hay DOS horas y una sola página al día:
+  #
+  # DISPARO PRINCIPAL: una automatización de Atajos en el iPhone llama a las 06:00 a la API de
+  # GitHub (evento workflow_dispatch, el mismo del botón "Run workflow"). Ese tipo de corrida
+  # arranca en segundos.
+  #
+  # RESPALDO: las tareas programadas de GitHub NO son puntuales. En este repositorio llegaron
+  # unas 6 horas tarde (programadas 06:07 y 06:47, ejecutadas 11:55, 12:18 y 12:30). Se dejan
+  # solo por si el iPhone no disparó: cualquier corrida programada se salta si ya hay página
+  # de hoy (paso "Decidir si hace falta correr"), así una tardía no reemplaza la de la mañana
+  # por una de mediodía.
   schedule:
-    # Principal: 12:07 UTC = 06:07 en CDMX. Siempre corre.
-    - cron: "7 12 * * 1-5"
-    # Respaldo: 12:47 UTC = 06:47 en CDMX. Solo corre si todavía no hay página de hoy
-    # (lo decide el paso "Decidir si hace falta correr"). Si el texto de este cron cambia,
-    # hay que cambiarlo también en ese paso.
-    - cron: "47 12 * * 1-5"
-  # Botón "Run workflow" en la pestaña Actions, para probarlo a mano.
+    - cron: "7 12 * * 1-5"    # 12:07 UTC = 06:07 en CDMX (si GitHub cumpliera)
+    - cron: "47 12 * * 1-5"   # 12:47 UTC = 06:47 en CDMX
+  # El disparo del iPhone y el botón "Run workflow" de la pestaña Actions.
   workflow_dispatch:
   # Al subir cambios al código o a tu lista de EE. UU. se regenera la página (el commit del
   # propio robot solo toca docs/, que no está en esta lista, así que no se dispara en bucle).
@@ -49,15 +53,15 @@ jobs:
           EVENTO: ${{ github.event_name }}
           CRON: ${{ github.event.schedule }}
         run: |
-          # Solo el respaldo puede saltarse. Cualquier otra causa (la principal, un push, el
-          # botón manual) siempre corre.
+          # Solo las corridas programadas (respaldo) pueden saltarse. El disparo del iPhone, el
+          # botón manual y los cambios de código siempre corren.
           omitir=false
-          if [ "$EVENTO" = "schedule" ] && [ "$CRON" = "47 12 * * 1-5" ]; then
+          if [ "$EVENTO" = "schedule" ]; then
             if [ "$(python tools/ya_publicado.py docs/index.html)" = "si" ]; then
               omitir=true
-              echo "La página de hoy ya está publicada: el respaldo no tiene nada que hacer."
+              echo "Respaldo ($CRON): la página de hoy ya está publicada, no hay nada que hacer."
             else
-              echo "Todavía no hay página de hoy: el respaldo la genera."
+              echo "Respaldo ($CRON): todavía no hay página de hoy, la genero."
             fi
           fi
           echo "omitir=$omitir" >> "$GITHUB_OUTPUT"
